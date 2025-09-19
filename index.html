@@ -705,37 +705,54 @@
 
         /**
          * Checks if a given date falls within New Zealand Daylight Time (NZDT).
-         * NZDT starts on the last Sunday of September and ends on the first Sunday of April.
+         * NZDT starts at 2 AM (NZST) on the last Sunday of September.
+         * NZDT ends at 3 AM (NZDT) on the first Sunday of April.
          * @param {Date} date - The date to check.
          * @returns {boolean} - True if the date is in NZDT.
          */
         const isNZDT = (date) => {
             const year = date.getFullYear();
-            // Find the last Sunday of September
-            const lastDayOfSep = new Date(year, 9, 0); // September is month 8 (0-indexed), 9 gets us Oct 0, which is Sep 30
+            
+            // Find the last Sunday of September for the given year
+            const lastDayOfSep = new Date(year, 9, 0); // Month is 0-indexed, 9 is October. Day 0 gives last day of previous month (September)
             const lastSundayOfSep = new Date(lastDayOfSep);
-            lastSundayOfSep.setDate(lastDayOfSep.getDate() - lastDayOfSep.getDay());
+            lastSundayOfSep.setDate(lastDayOfSep.getDate() - lastDayOfSep.getDay()); // Find the preceding Sunday
             lastSundayOfSep.setHours(2, 0, 0, 0); // NZDT starts at 2 AM NZST
 
-            // Find the first Sunday of April
-            const firstDayOfApril = new Date(year, 3, 1); // April is month 3
+            // Find the first Sunday of April for the given year
+            const firstDayOfApril = new Date(year, 3, 1); // Month 3 is April
             const firstSundayOfApril = new Date(firstDayOfApril);
-            firstSundayOfApril.setDate(1 + (7 - firstDayOfApril.getDay()) % 7);
+            firstSundayOfApril.setDate(1 + (7 - firstDayOfApril.getDay()) % 7); // Find the following Sunday
             firstSundayOfApril.setHours(3, 0, 0, 0); // NZDT ends at 3 AM NZDT
 
             return date >= lastSundayOfSep || date < firstSundayOfApril;
         };
         
+        /**
+         * Calculates the time remaining until a due date, based on New Zealand time.
+         * It correctly handles the switch between NZST (UTC+12) and NZDT (UTC+13).
+         * @param {string} dueDateStr - The due date in 'YYYY-MM-DD' format.
+         * @returns {object} - An object with the display text and a CSS class name.
+         */
         const calculateCountdown = (dueDateStr) => {
             if (!dueDateStr) return { text: '', className: '' };
 
-            const dueDate = new Date(dueDateStr);
-            const utcOffset = isNZDT(dueDate) ? 13 : 12;
-            const utcHour = 24 - utcOffset;
+            // Create a date object from the string to perform the timezone check.
+            // Using midday (12:00Z) avoids any edge cases with DST transitions.
+            const checkDate = new Date(dueDateStr + 'T12:00:00Z'); 
+            
+            const isDaylightTime = isNZDT(checkDate);
 
-            // Create the deadline in UTC
-            const due = new Date(dueDateStr + `T${String(utcHour).padStart(2, '0')}:59:59Z`);
-            const now = new Date();
+            // Determine the correct UTC hour that corresponds to the end of the day (23:59:59) in New Zealand.
+            // NZST (UTC+12): 23:59:59 NZST is 11:59:59 UTC.
+            // NZDT (UTC+13): 23:59:59 NZDT is 10:59:59 UTC.
+            const utcHourForEndOfDay = isDaylightTime ? 10 : 11; 
+
+            // Create the precise deadline in UTC.
+            const due = new Date(`${dueDateStr}T${String(utcHourForEndOfDay).padStart(2, '0')}:59:59Z`);
+
+            // Get the current time from the user's browser.
+            const now = new Date(); 
             const diffTime = due - now;
 
             // Overdue
@@ -753,7 +770,7 @@
                 return { text: `in ${days} day${days !== 1 ? 's' : ''}`, className: 'countdown-soon' };
             }
             
-            // Less than a day, show H:M:S
+            // Less than a day left, show the H:M:S timer.
             const pad = (num) => num.toString().padStart(2, '0');
             return { text: `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`, className: 'countdown-today' };
         };
@@ -1007,4 +1024,3 @@
     </script>
 </body>
 </html>
-
