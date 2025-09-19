@@ -692,25 +692,27 @@
         // --- HELPER FUNCTIONS ---
         const getWeekNumber = (dateString) => {
             if (!dateString) return null;
-
-            // This function calculates the ISO 8601 week number for a given date.
-            // This ensures the week display aligns with standard calendar weeks.
-            const date = new Date(dateString + 'T12:00:00Z'); // Use noon to prevent DST crossover issues
+            // Define the Monday of the week that is considered "Week 9".
+            // September 19, 2025 is a Friday, so the Monday of that week is September 15, 2025.
+            const week9Monday = new Date('2025-09-15T00:00:00Z');
             
-            // Create a new date in UTC for calculation to avoid timezone offsets
-            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            const taskDate = new Date(dateString + 'T12:00:00Z'); // Use noon to avoid DST issues
             
-            // Get the day of the week (Sunday is 0, make it 7 for ISO)
-            const dayNum = d.getUTCDay() || 7;
+            // Find the Monday of the task's week. Day 0 is Sunday.
+            const taskDay = taskDate.getUTCDay(); 
+            const diffToMonday = taskDay === 0 ? -6 : 1 - taskDay; // Calculate offset to get to Monday
             
-            // Set the date to the Thursday of that week
-            d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+            const taskMonday = new Date(taskDate.getTime());
+            taskMonday.setUTCDate(taskDate.getUTCDate() + diffToMonday);
             
-            // Get the first day of the year
-            const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+            // Calculate the difference in time between the two Mondays
+            const diffTime = taskMonday.getTime() - week9Monday.getTime();
             
-            // Calculate the number of weeks between the Thursday and the start of the year
-            return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+            // Convert the time difference to weeks and round it
+            const diffWeeks = Math.round(diffTime / (1000 * 60 * 60 * 24 * 7));
+            
+            // The final week number is 9 plus the difference in weeks.
+            return 9 + diffWeeks;
         };
 
         /**
