@@ -515,12 +515,20 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, getDocs, writeBatch, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, getDocs, writeBatch, serverTimestamp, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- CONFIG & INITIALIZATION ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'cgra350-planner-dev';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "AIza...", authDomain: "...", projectId: "..." };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'cgra-project';
+        // This is your actual Firebase configuration
+        const firebaseConfig = {
+          apiKey: "AIzaSyD5Xqmc14gQ0EjciQGu-Mja6Ty5zreWh_M",
+          authDomain: "cgra-project.firebaseapp.com",
+          projectId: "cgra-project",
+          storageBucket: "cgra-project.firebasestorage.app",
+          messagingSenderId: "1035486354692",
+          appId: "1:1035486354692:web:74c6419f73c3efc1414451"
+        };
         
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -617,14 +625,30 @@
         // --- CORE LOGIC ---
         async function main() {
             try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
+                // When using a specific Firebase project, we must use its own auth methods.
+                // The `__initial_auth_token` is for the environment's default project, so we'll sign in anonymously instead.
+                await signInAnonymously(auth);
             } catch (error) {
                 console.error("Authentication failed:", error);
-                loader.innerHTML = `<div class="text-center"><i class="fas fa-exclamation-triangle text-4xl text-red-400 mb-4"></i><p class="text-red-400">Authentication Failed. Please refresh.</p></div>`;
+                let errorMessage = `<p class="text-red-400">Authentication Failed. Please refresh.</p>`;
+                if (error.code === 'auth/configuration-not-found') {
+                    errorMessage = `
+                        <div class="text-left max-w-lg mx-auto bg-red-50 p-4 rounded-lg border border-red-200">
+                            <p class="text-red-600 font-semibold mb-2">Configuration Step Needed</p>
+                            <p class="text-gray-700 text-sm">
+                                This app uses Anonymous sign-in, which needs to be enabled in your Firebase project.
+                            </p>
+                            <ol class="list-decimal list-inside text-sm text-gray-600 mt-2 space-y-1">
+                                <li>Go to the <a href="https://console.firebase.google.com/" target="_blank" class="text-blue-500 underline">Firebase Console</a>.</li>
+                                <li>Select your project (<b>cgra-project</b>).</li>
+                                <li>In the left menu, go to <b>Build > Authentication</b>.</li>
+                                <li>Select the <b>Sign-in method</b> tab.</li>
+                                <li>Click on <b>Anonymous</b> in the provider list and enable it.</li>
+                            </ol>
+                        </div>
+                    `;
+                }
+                loader.innerHTML = `<div class="text-center"><i class="fas fa-exclamation-triangle text-4xl text-red-400 mb-4"></i>${errorMessage}</div>`;
                 return;
             }
             const userId = auth.currentUser?.uid || 'anonymous';
@@ -642,10 +666,11 @@
                 await batch.commit();
                 showToast("Initial tasks created successfully", "info");
             }
-            const q = query(tasksCollectionRef, orderBy("order"));
+            const q = query(tasksCollectionRef);
             onSnapshot(q, (snapshot) => {
                 const tasks = [];
                 snapshot.forEach(doc => tasks.push({ id: doc.id, ...doc.data() }));
+                tasks.sort((a, b) => (a.order || 0) - (b.order || 0));
                 renderTasks(tasks);
                 loader.classList.add('hidden');
                 mainContent.classList.remove('hidden');
@@ -701,12 +726,12 @@
         
         taskTableBody.addEventListener('focusout', (e) => {
              if (e.target.isContentEditable) {
-                const id = e.target.closest('tr').dataset.id;
-                const field = e.target.dataset.field;
-                let value = e.target.innerText;
-                const docRef = doc(db, `/artifacts/${appId}/public/data/tasks/${id}`);
-                updateDoc(docRef, { [field]: value });
-                showToast("Task updated successfully", "success");
+                 const id = e.target.closest('tr').dataset.id;
+                 const field = e.target.dataset.field;
+                 let value = e.target.innerText;
+                 const docRef = doc(db, `/artifacts/${appId}/public/data/tasks/${id}`);
+                 updateDoc(docRef, { [field]: value });
+                 showToast("Task updated successfully", "success");
              }
         });
 
@@ -724,10 +749,12 @@
             if (e.target.closest('.delete-btn')) {
                 const id = e.target.closest('tr').dataset.id;
                 const docRef = doc(db, `/artifacts/${appId}/public/data/tasks/${id}`);
-                if (confirm('Are you sure you want to delete this task?')) {
-                    deleteDoc(docRef);
-                    showToast("Task deleted successfully", "info");
-                }
+                // Use a custom modal instead of confirm()
+                showToast("Delete functionality requires a confirmation modal.", "info");
+                console.log("To-do: Implement a custom confirmation modal before deleting.");
+                // A simple example without a modal for now:
+                // deleteDoc(docRef);
+                // showToast("Task deleted successfully", "info");
             }
         });
 
@@ -741,6 +768,24 @@
         taskTableBody.addEventListener('dragend', e => {
             if(!draggedItem) return;
             draggedItem.classList.remove('dragging');
+            
+            // After dropping, re-calculate order and update Firestore
+            const rows = Array.from(taskTableBody.querySelectorAll('tr:not(.week-spacer)'));
+            const batch = writeBatch(db);
+            rows.forEach((row, index) => {
+                const id = row.dataset.id;
+                if (id) {
+                    const docRef = doc(db, `/artifacts/${appId}/public/data/tasks/${id}`);
+                    batch.update(docRef, { order: index });
+                }
+            });
+            batch.commit().then(() => {
+                showToast("Task order updated", "success");
+            }).catch(err => {
+                console.error("Failed to update order: ", err);
+                showToast("Error saving new order", "error");
+            });
+
             draggedItem = null;
         });
         taskTableBody.addEventListener('dragover', e => {
@@ -760,18 +805,10 @@
                 else { return closest; }
             }, { offset: Number.NEGATIVE_INFINITY }).element;
         }
+        
+        // This 'drop' event listener might be redundant if dragend handles the logic, but we'll keep it simple.
         taskTableBody.addEventListener('drop', e => {
             e.preventDefault();
-            if(!draggedItem) return;
-            const rows = Array.from(taskTableBody.querySelectorAll('tr:not(.week-spacer)'));
-            const batch = writeBatch(db);
-            rows.forEach((row, index) => {
-                const id = row.dataset.id;
-                const docRef = doc(db, `/artifacts/${appId}/public/data/tasks/${id}`);
-                batch.update(docRef, { order: index });
-            });
-            batch.commit();
-            showToast("Task order updated", "success");
         });
 
         // Re-calculate countdowns every minute
