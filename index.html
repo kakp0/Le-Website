@@ -692,15 +692,25 @@
         // --- HELPER FUNCTIONS ---
         const getWeekNumber = (dateString) => {
             if (!dateString) return null;
-            const week9Monday = new Date('2025-09-15T00:00:00Z');
-            const taskDate = new Date(dateString + 'T00:00:00Z');
-            const taskDay = taskDate.getUTCDay();
-            const diffToMonday = taskDay === 0 ? -6 : 1 - taskDay;
-            const taskMonday = new Date(taskDate.getTime());
-            taskMonday.setUTCDate(taskDate.getUTCDate() + diffToMonday);
-            const diffTime = taskMonday.getTime() - week9Monday.getTime();
-            const diffWeeks = Math.round(diffTime / (1000 * 60 * 60 * 24 * 7));
-            return 9 + diffWeeks;
+
+            // This function calculates the ISO 8601 week number for a given date.
+            // This ensures the week display aligns with standard calendar weeks.
+            const date = new Date(dateString + 'T12:00:00Z'); // Use noon to prevent DST crossover issues
+            
+            // Create a new date in UTC for calculation to avoid timezone offsets
+            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            
+            // Get the day of the week (Sunday is 0, make it 7 for ISO)
+            const dayNum = d.getUTCDay() || 7;
+            
+            // Set the date to the Thursday of that week
+            d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+            
+            // Get the first day of the year
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+            
+            // Calculate the number of weeks between the Thursday and the start of the year
+            return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
         };
 
         /**
@@ -1024,3 +1034,4 @@
     </script>
 </body>
 </html>
+
